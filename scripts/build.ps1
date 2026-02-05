@@ -9,6 +9,8 @@ if (-not $python) {
   exit 1
 }
 
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 python -m pip install --upgrade pyinstaller
 
 if (Test-Path build) { Remove-Item build -Recurse -Force }
