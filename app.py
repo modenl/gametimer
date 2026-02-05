@@ -3,7 +3,7 @@ import sys
 import time
 import subprocess
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import filedialog, messagebox
 
 try:
     import psutil
@@ -74,7 +74,6 @@ class TimerApp:
         self.overlay = None
         self.overlay_label = None
 
-        self.setup_style()
         self.build_ui()
         self.detect_paths()
         self.tick()
@@ -117,67 +116,20 @@ class TimerApp:
 
         return games
 
-    def setup_style(self):
-        style = ttk.Style(self.root)
-        try:
-            style.theme_use("clam")
-        except tk.TclError:
-            pass
-
-        style.configure(
-            "Base.TButton",
-            background="#1f2937",
-            foreground="#e2e8f0",
-            borderwidth=0,
-            focusthickness=0,
-            padding=(10, 6),
-        )
-        style.map(
-            "Base.TButton",
-            background=[("active", "#334155"), ("pressed", "#0f172a")],
-            foreground=[("active", "#f8fafc")],
-        )
-
-        style.configure(
-            "Start.TButton",
-            background="#065f46",
-            foreground="#ecfdf5",
-            borderwidth=0,
-            focusthickness=0,
-            padding=(10, 6),
-        )
-        style.map(
-            "Start.TButton",
-            background=[("active", "#047857"), ("pressed", "#064e3b")],
-            foreground=[("active", "#f0fdf4")],
-        )
-
-        style.configure(
-            "Stop.TButton",
-            background="#7f1d1d",
-            foreground="#fef2f2",
-            borderwidth=0,
-            focusthickness=0,
-            padding=(10, 6),
-        )
-        style.map(
-            "Stop.TButton",
-            background=[("active", "#991b1b"), ("pressed", "#7f1d1d")],
-            foreground=[("active", "#fef2f2")],
-        )
-
-        style.configure(
-            "Admin.TButton",
-            background="#3b0764",
-            foreground="#fdf4ff",
-            borderwidth=0,
-            focusthickness=0,
-            padding=(10, 6),
-        )
-        style.map(
-            "Admin.TButton",
-            background=[("active", "#581c87"), ("pressed", "#3b0764")],
-            foreground=[("active", "#fdf4ff")],
+    def make_button(self, parent, text, command, bg, fg, active_bg, active_fg):
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=bg,
+            fg=fg,
+            activebackground=active_bg,
+            activeforeground=active_fg,
+            bd=0,
+            relief="flat",
+            highlightthickness=0,
+            padx=10,
+            pady=6,
         )
 
     def build_ui(self):
@@ -205,19 +157,25 @@ class TimerApp:
         button_row = tk.Frame(self.root, bg="#0f1115")
         button_row.pack(fill="x", padx=24)
 
-        rescan_btn = ttk.Button(
+        rescan_btn = self.make_button(
             button_row,
             text="Rescan Paths",
             command=self.detect_paths,
-            style="Base.TButton",
+            bg="#1f2937",
+            fg="#e2e8f0",
+            active_bg="#334155",
+            active_fg="#f8fafc",
         )
         rescan_btn.pack(side="left")
 
-        admin_btn = ttk.Button(
+        admin_btn = self.make_button(
             button_row,
             text="Admin Reset Cooldown",
             command=self.prompt_admin_reset,
-            style="Admin.TButton",
+            bg="#3b0764",
+            fg="#fdf4ff",
+            active_bg="#581c87",
+            active_fg="#fdf4ff",
         )
         admin_btn.pack(side="right")
 
@@ -296,27 +254,36 @@ class TimerApp:
             action_frame = tk.Frame(list_frame, bg="#0f1115")
             action_frame.grid(row=idx, column=5, sticky="w", padx=6, pady=8)
 
-            browse_btn = ttk.Button(
+            browse_btn = self.make_button(
                 action_frame,
                 text="Set Path",
                 command=lambda s=state: self.choose_path(s),
-                style="Base.TButton",
+                bg="#1f2937",
+                fg="#e2e8f0",
+                active_bg="#334155",
+                active_fg="#f8fafc",
             )
             browse_btn.pack(side="left", padx=2)
 
-            start_btn = ttk.Button(
+            start_btn = self.make_button(
                 action_frame,
                 text="Start",
                 command=lambda s=state: self.start_game(s),
-                style="Start.TButton",
+                bg="#065f46",
+                fg="#ecfdf5",
+                active_bg="#047857",
+                active_fg="#ecfdf5",
             )
             start_btn.pack(side="left", padx=2)
 
-            stop_btn = ttk.Button(
+            stop_btn = self.make_button(
                 action_frame,
                 text="Stop",
                 command=lambda s=state: self.stop_game(s, manual=True),
-                style="Stop.TButton",
+                bg="#7f1d1d",
+                fg="#fef2f2",
+                active_bg="#991b1b",
+                active_fg="#fef2f2",
             )
             stop_btn.pack(side="left", padx=2)
 
@@ -549,11 +516,14 @@ class TimerApp:
             else:
                 status.config(text="Wrong password")
 
-        submit_btn = ttk.Button(
+        submit_btn = self.make_button(
             dialog,
             text="Reset Cooldown",
             command=submit,
-            style="Start.TButton",
+            bg="#065f46",
+            fg="#ecfdf5",
+            active_bg="#047857",
+            active_fg="#ecfdf5",
         )
         submit_btn.pack(pady=8)
 
