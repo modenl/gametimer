@@ -57,6 +57,50 @@ class GameState:
         self.remaining_var.set("--:--")
 
 
+class FlatButton(tk.Label):
+    def __init__(self, parent, text, command, bg, fg, active_bg, active_fg):
+        super().__init__(
+            parent,
+            text=text,
+            bg=bg,
+            fg=fg,
+            padx=10,
+            pady=6,
+            cursor="hand2",
+            font=("Helvetica", 11, "bold"),
+        )
+        self.default_bg = bg
+        self.default_fg = fg
+        self.active_bg = active_bg
+        self.active_fg = active_fg
+        self.command = command
+
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
+        self.bind("<ButtonPress-1>", self._on_press)
+        self.bind("<ButtonRelease-1>", self._on_release)
+
+    def _on_enter(self, _event=None):
+        self.configure(bg=self.active_bg, fg=self.active_fg)
+
+    def _on_leave(self, _event=None):
+        self.configure(bg=self.default_bg, fg=self.default_fg)
+
+    def _on_press(self, _event=None):
+        self.configure(bg=self.default_bg, fg=self.default_fg)
+
+    def _on_release(self, event=None):
+        self.configure(bg=self.active_bg, fg=self.active_fg)
+        if self.command is None:
+            return
+        if event is None:
+            self.command()
+            return
+        widget = self.winfo_containing(event.x_root, event.y_root)
+        if widget is self:
+            self.command()
+
+
 class TimerApp:
     def __init__(self, root):
         self.root = root
@@ -117,19 +161,14 @@ class TimerApp:
         return games
 
     def make_button(self, parent, text, command, bg, fg, active_bg, active_fg):
-        return tk.Button(
+        return FlatButton(
             parent,
             text=text,
             command=command,
             bg=bg,
             fg=fg,
-            activebackground=active_bg,
-            activeforeground=active_fg,
-            bd=0,
-            relief="flat",
-            highlightthickness=0,
-            padx=10,
-            pady=6,
+            active_bg=active_bg,
+            active_fg=active_fg,
         )
 
     def build_ui(self):
