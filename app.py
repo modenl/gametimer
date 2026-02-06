@@ -3,6 +3,7 @@ import sys
 import time
 import subprocess
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import filedialog, messagebox
 
 try:
@@ -57,23 +58,40 @@ class GameState:
         self.remaining_var.set("--:--")
 
 
-class FlatButton(tk.Label):
+class CanvasButton(tk.Canvas):
     def __init__(self, parent, text, command, bg, fg, active_bg, active_fg):
+        font = tkfont.Font(family="Helvetica", size=11, weight="bold")
+        text_w = font.measure(text)
+        width = max(90, text_w + 24)
+        height = 34
+
         super().__init__(
             parent,
-            text=text,
-            bg=bg,
-            fg=fg,
-            padx=10,
-            pady=6,
+            width=width,
+            height=height,
+            bg=parent.cget("bg"),
+            bd=0,
+            highlightthickness=0,
             cursor="hand2",
-            font=("Helvetica", 11, "bold"),
         )
         self.default_bg = bg
         self.default_fg = fg
         self.active_bg = active_bg
         self.active_fg = active_fg
         self.command = command
+        self.text = text
+        self.font = font
+
+        self.rect = self.create_rectangle(
+            0, 0, width, height, fill=self.default_bg, outline=self.default_bg
+        )
+        self.text_id = self.create_text(
+            width / 2,
+            height / 2,
+            text=self.text,
+            fill=self.default_fg,
+            font=self.font,
+        )
 
         self.bind("<Enter>", self._on_enter)
         self.bind("<Leave>", self._on_leave)
@@ -81,16 +99,20 @@ class FlatButton(tk.Label):
         self.bind("<ButtonRelease-1>", self._on_release)
 
     def _on_enter(self, _event=None):
-        self.configure(bg=self.active_bg, fg=self.active_fg)
+        self.itemconfigure(self.rect, fill=self.active_bg, outline=self.active_bg)
+        self.itemconfigure(self.text_id, fill=self.active_fg)
 
     def _on_leave(self, _event=None):
-        self.configure(bg=self.default_bg, fg=self.default_fg)
+        self.itemconfigure(self.rect, fill=self.default_bg, outline=self.default_bg)
+        self.itemconfigure(self.text_id, fill=self.default_fg)
 
     def _on_press(self, _event=None):
-        self.configure(bg=self.default_bg, fg=self.default_fg)
+        self.itemconfigure(self.rect, fill=self.default_bg, outline=self.default_bg)
+        self.itemconfigure(self.text_id, fill=self.default_fg)
 
     def _on_release(self, event=None):
-        self.configure(bg=self.active_bg, fg=self.active_fg)
+        self.itemconfigure(self.rect, fill=self.active_bg, outline=self.active_bg)
+        self.itemconfigure(self.text_id, fill=self.active_fg)
         if self.command is None:
             return
         if event is None:
@@ -161,7 +183,7 @@ class TimerApp:
         return games
 
     def make_button(self, parent, text, command, bg, fg, active_bg, active_fg):
-        return FlatButton(
+        return CanvasButton(
             parent,
             text=text,
             command=command,
