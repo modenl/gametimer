@@ -177,9 +177,16 @@ class TimerApp:
         self.root.configure(bg="#0f1115")
         self.root.attributes("-fullscreen", True)
         self.root.bind("<F11>", self.toggle_fullscreen)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close_request)
+        self.root.bind("<Unmap>", self.on_unmap)
+        self.root.bind_all("<Alt-F4>", self.block_shortcuts)
+        self.root.bind_all("<Control-q>", self.block_shortcuts)
+        self.root.bind_all("<Command-q>", self.block_shortcuts)
+        self.root.bind_all("<Escape>", self.block_shortcuts)
 
         self.admin_password = ADMIN_PASSWORD_DEFAULT
         self.cooldown_until = None
+        self.lockdown_active = True
 
         self.games = self.build_games()
         self.game_states = [GameState(cfg) for cfg in self.games]
@@ -290,6 +297,17 @@ class TimerApp:
             active_fg="#fdf4ff",
         )
         self.admin_btn.pack(side="right")
+
+        self.admin_exit_btn = self.make_button(
+            button_row,
+            text="Admin Exit",
+            command=self.prompt_admin_exit,
+            bg="#7f1d1d",
+            fg="#fef2f2",
+            active_bg="#991b1b",
+            active_fg="#fef2f2",
+        )
+        self.admin_exit_btn.pack(side="right", padx=8)
 
         list_frame = tk.Frame(self.root, bg="#0f1115")
         list_frame.pack(fill="both", expand=True, padx=24, pady=16)
@@ -423,8 +441,50 @@ class TimerApp:
         self.refresh_controls()
 
     def toggle_fullscreen(self, _event=None):
+        if self.lockdown_active:
+            return "break"
         current = self.root.attributes("-fullscreen")
         self.root.attributes("-fullscreen", not current)
+        return "break"
+
+    def block_shortcuts(self, _event=None):
+        if self.lockdown_active:
+            return "break"
+        return None
+
+    def on_close_request(self):
+        self.set_status_all("Locked. Use Admin Exit.")
+
+    def on_unmap(self, _event=None):
+        if self.lockdown_active and self.root.state() == "iconic":
+            self.root.after(80, self.restore_if_locked)
+
+    def restore_if_locked(self):
+        if not self.lockdown_active:
+            return
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+            self.ensure_fullscreen()
+        except tk.TclError:
+            return
+
+    def set_status_all(self, text):
+        for state in self.game_states:
+            if not state.running:
+                state.status_var.set(text)
+
+    def apply_lockdown_mode(self):
+        should_lock = not self.any_game_running()
+        self.lockdown_active = should_lock
+
+        if should_lock:
+            self.restore_if_locked()
+            self.ensure_fullscreen()
+            self.root.attributes("-topmost", True)
+        else:
+            self.root.attributes("-topmost", False)
 
     def detect_paths(self):
         for state in self.game_states:
@@ -472,6 +532,7 @@ class TimerApp:
     def refresh_controls(self):
         cooldown_on = self.cooldown_active()
         any_running = self.any_game_running()
+        self.apply_lockdown_mode()
 
         for state in self.game_states:
             has_valid_time = self.parse_minutes(state.time_var.get()) is not None
@@ -503,6 +564,8 @@ class TimerApp:
             self.admin_btn.set_enabled(cooldown_on and (not any_running))
         if hasattr(self, "rescan_btn"):
             self.rescan_btn.set_enabled(not any_running)
+        if hasattr(self, "admin_exit_btn"):
+            self.admin_exit_btn.set_enabled(True)
 
     def start_cooldown_if_idle(self):
         if not self.any_game_running():
@@ -558,6 +621,10 @@ class TimerApp:
         state.end_ts = state.start_ts + duration
         state.status_var.set("Running")
         state.remaining_var.set(self.format_seconds(int(duration)))
+        try:
+            self.root.iconify()
+        except tk.TclError:
+            pass
         self.refresh_controls()
 
     def stop_game(self, state, manual=False):
@@ -659,7 +726,6 @@ class TimerApp:
         self.root.attributes("-fullscreen", True)
         self.root.lift()
         self.root.attributes("-topmost", True)
-        self.root.after(200, lambda: self.root.attributes("-topmost", False))
 
     def prompt_admin_reset(self):
         if self.any_game_running():
@@ -706,6 +772,48 @@ class TimerApp:
             fg="#ecfdf5",
             active_bg="#047857",
             active_fg="#ecfdf5",
+        )
+        submit_btn.pack(pady=8)
+
+    def prompt_admin_exit(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Admin Exit")
+        dialog.configure(bg="#0f1115")
+        dialog.geometry("320x180")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.attributes("-topmost", True)
+
+        label = tk.Label(
+            dialog,
+            text="Enter admin password to exit",
+            fg="#e2e8f0",
+            bg="#0f1115",
+            font=("Helvetica", 12),
+        )
+        label.pack(pady=12)
+
+        entry = tk.Entry(dialog, show="*", bg="#111827", fg="#f8fafc", relief="flat")
+        entry.pack(pady=6)
+        entry.focus_set()
+
+        status = tk.Label(dialog, text="", fg="#f87171", bg="#0f1115")
+        status.pack(pady=4)
+
+        def submit_exit():
+            if entry.get() == self.admin_password:
+                self.root.destroy()
+            else:
+                status.config(text="Wrong password")
+
+        submit_btn = self.make_button(
+            dialog,
+            text="Exit App",
+            command=submit_exit,
+            bg="#7f1d1d",
+            fg="#fef2f2",
+            active_bg="#991b1b",
+            active_fg="#fef2f2",
         )
         submit_btn.pack(pady=8)
 
