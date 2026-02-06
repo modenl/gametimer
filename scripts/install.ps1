@@ -7,8 +7,10 @@ if ([string]::IsNullOrWhiteSpace($Repo)) {
 }
 
 $arch = if ([Environment]::Is64BitOperatingSystem) { "x86_64" } else { "x86" }
-$asset = "pctimer-windows-$arch.zip"
-$url = "https://github.com/$Repo/releases/latest/download/$asset"
+$assets = @("pctimer-windows-$arch.zip")
+if ($arch -eq "x86_64") {
+  $assets += "pctimer-windows-x86.zip"
+}
 
 $destDir = Join-Path $Env:LOCALAPPDATA 'PCTimer'
 if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
@@ -16,10 +18,28 @@ if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | O
 $tempDir = Join-Path $Env:TEMP ("pctimer-" + [Guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 
-$zipPath = Join-Path $tempDir $asset
+$zipPath = ""
+$selectedAsset = ""
 
 try {
-  Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+  foreach ($asset in $assets) {
+    $candidateUrl = "https://github.com/$Repo/releases/latest/download/$asset"
+    $candidateZip = Join-Path $tempDir $asset
+    try {
+      Invoke-WebRequest -Uri $candidateUrl -OutFile $candidateZip -UseBasicParsing -MaximumRetryCount 5 -RetryIntervalSec 2
+      $zipPath = $candidateZip
+      $selectedAsset = $asset
+      break
+    } catch {
+      continue
+    }
+  }
+
+  if ([string]::IsNullOrWhiteSpace($zipPath)) {
+    Write-Error "Failed to download release asset from $Repo. GitHub may be temporarily unavailable or release artifacts are not ready."
+    exit 1
+  }
+
   Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
   Copy-Item (Join-Path $tempDir 'pctimer.exe') (Join-Path $destDir 'pctimer.exe') -Force
 } finally {
