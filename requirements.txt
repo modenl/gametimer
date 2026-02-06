@@ -1,2 +1,2 @@
 psutil>=5.9.0
-pyobjc-framework-AppKit>=10.3; sys_platform == "darwin"
+pyobjc-framework-Cocoa>=10.3; sys_platform == "darwin"
