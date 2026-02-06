@@ -11,6 +11,24 @@ try:
 except ImportError:
     psutil = None
 
+if sys.platform == "darwin":
+    try:
+        from AppKit import NSApplication
+        from AppKit import NSApplicationPresentationDefault
+        from AppKit import NSApplicationPresentationDisableAppleMenu
+        from AppKit import NSApplicationPresentationDisableForceQuit
+        from AppKit import NSApplicationPresentationDisableHideApplication
+        from AppKit import NSApplicationPresentationDisableProcessSwitching
+        from AppKit import NSApplicationPresentationDisableSessionTermination
+        from AppKit import NSApplicationPresentationHideDock
+        from AppKit import NSApplicationPresentationHideMenuBar
+
+        APPKIT_AVAILABLE = True
+    except ImportError:
+        APPKIT_AVAILABLE = False
+else:
+    APPKIT_AVAILABLE = False
+
 
 ADMIN_PASSWORD_DEFAULT = "123456"
 COOLDOWN_SECONDS = 60 * 60
@@ -182,11 +200,16 @@ class TimerApp:
         self.root.bind_all("<Alt-F4>", self.block_shortcuts)
         self.root.bind_all("<Control-q>", self.block_shortcuts)
         self.root.bind_all("<Command-q>", self.block_shortcuts)
+        self.root.bind_all("<Command-Tab>", self.block_shortcuts)
+        self.root.bind_all("<Control-Escape>", self.block_shortcuts)
         self.root.bind_all("<Escape>", self.block_shortcuts)
 
         self.admin_password = ADMIN_PASSWORD_DEFAULT
         self.cooldown_until = None
         self.lockdown_active = True
+        self.last_lockdown_state = None
+        self.macos_kiosk_available = APPKIT_AVAILABLE
+        self.macos_lock_warning_shown = False
 
         self.games = self.build_games()
         self.game_states = [GameState(cfg) for cfg in self.games]
@@ -479,12 +502,45 @@ class TimerApp:
         should_lock = not self.any_game_running()
         self.lockdown_active = should_lock
 
+        if self.last_lockdown_state != should_lock:
+            self.set_system_lockdown(should_lock)
+            self.last_lockdown_state = should_lock
+
         if should_lock:
             self.restore_if_locked()
             self.ensure_fullscreen()
             self.root.attributes("-topmost", True)
         else:
             self.root.attributes("-topmost", False)
+
+    def set_system_lockdown(self, enabled):
+        if platform_name() != "mac":
+            return
+
+        if not self.macos_kiosk_available:
+            if enabled and (not self.macos_lock_warning_shown):
+                self.macos_lock_warning_shown = True
+                self.set_status_all("Install pyobjc for strict macOS lock")
+            return
+
+        try:
+            app = NSApplication.sharedApplication()
+            if enabled:
+                options = (
+                    NSApplicationPresentationHideDock
+                    | NSApplicationPresentationHideMenuBar
+                    | NSApplicationPresentationDisableAppleMenu
+                    | NSApplicationPresentationDisableProcessSwitching
+                    | NSApplicationPresentationDisableForceQuit
+                    | NSApplicationPresentationDisableSessionTermination
+                    | NSApplicationPresentationDisableHideApplication
+                )
+                app.setPresentationOptions_(options)
+                app.activateIgnoringOtherApps_(True)
+            else:
+                app.setPresentationOptions_(NSApplicationPresentationDefault)
+        except Exception:
+            return
 
     def detect_paths(self):
         for state in self.game_states:
@@ -802,6 +858,7 @@ class TimerApp:
 
         def submit_exit():
             if entry.get() == self.admin_password:
+                self.set_system_lockdown(False)
                 self.root.destroy()
             else:
                 status.config(text="Wrong password")

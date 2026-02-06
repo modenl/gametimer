@@ -43,4 +43,5 @@ Upload the generated artifacts from `dist/` to GitHub Releases using these names
 - Default games: Minecraft, Chrome.
 - Default session time: 40.00 minutes (editable).
 - Admin password to reset cooldown: `123456`.
+- In locked state (no game running), macOS release builds use system kiosk mode to block app switching/menu bar.
 - Press `F11` to toggle fullscreen for testing.
