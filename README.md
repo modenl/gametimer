@@ -16,9 +16,9 @@ macOS:
 curl -fsSL https://raw.githubusercontent.com/modenl/gametimer/main/scripts/install.sh | bash
 ```
 
-Windows (PowerShell):
-```powershell
-iwr -useb https://raw.githubusercontent.com/modenl/gametimer/main/scripts/install.ps1 | iex
+Windows (cmd):
+```bat
+curl -fsSL https://raw.githubusercontent.com/modenl/gametimer/main/scripts/install.cmd -o "%TEMP%\\pctimer-install.cmd" && call "%TEMP%\\pctimer-install.cmd"
 ```
 
 ## Build release assets
