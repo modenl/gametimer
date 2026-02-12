@@ -41,7 +41,11 @@ Upload the generated artifacts from `dist/` to GitHub Releases using these names
 
 ## Notes
 - Default games: Minecraft, Chrome.
+- Windows Minecraft launcher path detection prioritizes `XboxGames` locations (for Xbox app installs).
 - Default session time: 40.00 minutes (editable).
 - Admin password to reset cooldown: `123456`.
 - In locked state (no game running), macOS release builds use system kiosk mode to block app switching/menu bar.
+- Manually selected paths are persisted in user config:
+  - macOS: `~/Library/Application Support/PCTimer/settings.json`
+  - Windows: `%APPDATA%\\PCTimer\\settings.json`
 - Press `F11` to toggle fullscreen for testing.

@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import json
 import subprocess
 import tkinter as tk
 import tkinter.font as tkfont
@@ -33,6 +34,16 @@ else:
 ADMIN_PASSWORD_DEFAULT = "123456"
 COOLDOWN_SECONDS = 60 * 60
 DEFAULT_SESSION_MINUTES = 40.0
+
+
+def user_config_path():
+    if sys.platform.startswith("win"):
+        base_dir = os.environ.get("APPDATA") or os.path.expanduser("~")
+    elif sys.platform == "darwin":
+        base_dir = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
+    else:
+        base_dir = os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(base_dir, "PCTimer", "settings.json")
 
 
 def platform_name():
@@ -210,6 +221,8 @@ class TimerApp:
         self.last_lockdown_state = None
         self.macos_kiosk_available = APPKIT_AVAILABLE
         self.macos_lock_warning_shown = False
+        self.config_path = user_config_path()
+        self.saved_paths = self.load_saved_paths()
 
         self.games = self.build_games()
         self.game_states = [GameState(cfg) for cfg in self.games]
@@ -221,6 +234,101 @@ class TimerApp:
         self.detect_paths()
         self.tick()
 
+    def load_saved_paths(self):
+        try:
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        paths = data.get("game_paths", {})
+        if not isinstance(paths, dict):
+            return {}
+        cleaned = {}
+        for key, value in paths.items():
+            if isinstance(key, str) and isinstance(value, str) and value.strip():
+                cleaned[key] = value.strip()
+        return cleaned
+
+    def save_saved_paths(self):
+        config_dir = os.path.dirname(self.config_path)
+        os.makedirs(config_dir, exist_ok=True)
+        payload = {"game_paths": self.saved_paths}
+        temp_path = f"{self.config_path}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=True, indent=2)
+        os.replace(temp_path, self.config_path)
+
+    def remember_game_path(self, game_name, path):
+        if not path:
+            return
+        cleaned = path.strip()
+        if not cleaned:
+            return
+        self.saved_paths[game_name] = cleaned
+        try:
+            self.save_saved_paths()
+        except OSError:
+            return
+
+    def discover_windows_xbox_minecraft_paths(self):
+        roots = []
+        seen_roots = set()
+
+        for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
+            drive = f"{letter}:\\"
+            xbox_root = os.path.join(drive, "XboxGames")
+            gaming_root_flag = os.path.join(drive, ".GamingRoot")
+            if os.path.isdir(xbox_root) or os.path.isfile(gaming_root_flag):
+                normalized = os.path.normcase(os.path.normpath(xbox_root))
+                if normalized not in seen_roots:
+                    seen_roots.add(normalized)
+                    roots.append(xbox_root)
+
+        if not roots:
+            roots = [r"C:\XboxGames"]
+
+        found = []
+        seen_paths = set()
+
+        def add_if_exists(path):
+            if not os.path.exists(path):
+                return
+            normalized = os.path.normcase(os.path.normpath(path))
+            if normalized in seen_paths:
+                return
+            seen_paths.add(normalized)
+            found.append(path)
+
+        preferred_rel_paths = [
+            os.path.join("Minecraft Launcher", "Content", "MinecraftLauncher.exe"),
+            os.path.join("Minecraft Launcher", "Content", "Minecraft.exe"),
+            os.path.join("Minecraft", "Content", "MinecraftLauncher.exe"),
+            os.path.join("Minecraft", "Content", "Minecraft.exe"),
+        ]
+
+        for root in roots:
+            for rel_path in preferred_rel_paths:
+                add_if_exists(os.path.join(root, rel_path))
+
+        targets = {"minecraftlauncher.exe", "minecraft.exe"}
+        for root in roots:
+            if not os.path.isdir(root):
+                continue
+            for dirpath, dirnames, filenames in os.walk(root):
+                rel = os.path.relpath(dirpath, root)
+                depth = 0 if rel == "." else rel.count(os.sep) + 1
+                if depth > 5:
+                    dirnames[:] = []
+                    continue
+                for filename in filenames:
+                    if filename.lower() in targets:
+                        add_if_exists(os.path.join(dirpath, filename))
+                if len(found) >= 8:
+                    return found
+        return found
+
     def build_games(self):
         system = platform_name()
         chrome_paths = []
@@ -231,7 +339,11 @@ class TimerApp:
                 r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
                 r"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
             ]
-            minecraft_paths = [
+            minecraft_paths = self.discover_windows_xbox_minecraft_paths() + [
+                r"C:\\XboxGames\\Minecraft Launcher\\Content\\MinecraftLauncher.exe",
+                r"C:\\XboxGames\\Minecraft Launcher\\Content\\Minecraft.exe",
+                r"C:\\XboxGames\\Minecraft\\Content\\MinecraftLauncher.exe",
+                r"C:\\XboxGames\\Minecraft\\Content\\Minecraft.exe",
                 r"C:\\Program Files (x86)\\Minecraft Launcher\\MinecraftLauncher.exe",
                 r"C:\\Program Files\\Minecraft Launcher\\MinecraftLauncher.exe",
             ]
@@ -544,6 +656,19 @@ class TimerApp:
 
     def detect_paths(self):
         for state in self.game_states:
+            saved_path = self.saved_paths.get(state.config.name, "")
+            if saved_path:
+                state.path_var.set(saved_path)
+                if os.path.exists(saved_path):
+                    state.status_var.set("Ready")
+                    continue
+
+            current_path = state.path_var.get().strip()
+            if current_path and os.path.exists(current_path):
+                self.remember_game_path(state.config.name, current_path)
+                state.status_var.set("Ready")
+                continue
+
             found = ""
             for path in state.config.path_candidates:
                 if path and os.path.exists(path):
@@ -552,6 +677,7 @@ class TimerApp:
             if found:
                 state.path_var.set(found)
                 state.status_var.set("Ready")
+                self.remember_game_path(state.config.name, found)
             else:
                 if not state.path_var.get().strip():
                     state.status_var.set("Path not found")
@@ -563,6 +689,7 @@ class TimerApp:
         if selected:
             state.path_var.set(selected)
             state.status_var.set("Ready")
+            self.remember_game_path(state.config.name, selected)
         self.refresh_controls()
 
     def parse_minutes(self, value):
@@ -648,6 +775,7 @@ class TimerApp:
             state.status_var.set("Invalid path")
             self.refresh_controls()
             return
+        self.remember_game_path(state.config.name, path)
 
         minutes = self.parse_minutes(state.time_var.get())
         if minutes is None:
